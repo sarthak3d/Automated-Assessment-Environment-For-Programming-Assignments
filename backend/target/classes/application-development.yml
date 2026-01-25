@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration
+
+backend:
+  sso:
+    enabled: false
+
+gitlab:
+  url: ${GITLAB_URL:http://localhost:8929}
+
+logging:
+  level:
+    com.assessment: DEBUG
+    org.springframework.security: DEBUG
