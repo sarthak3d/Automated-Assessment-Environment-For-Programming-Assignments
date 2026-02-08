@@ -1,0 +1,137 @@
+{{- if and .Values.gitlab.enabled .Values.gitlabRunner.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-runner
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gitlab-runner
+spec:
+  replicas: {{ .Values.gitlabRunner.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "assessment-platform.runner.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "assessment-platform.runner.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/gitlab-runner/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "assessment-platform.fullname" . }}-runner
+      securityContext: {}
+      initContainers:
+        - name: wait-for-gitlab
+          image: curlimages/curl:8.4.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for GitLab to be ready..."
+              until curl -s -o /dev/null -w "%{http_code}" "{{ include "assessment-platform.gitlab.internalUrl" . }}/users/sign_in" 2>/dev/null | grep -q "200"; do
+                echo "GitLab not ready, waiting 10s..."
+                sleep 10
+              done
+              echo "GitLab is ready!"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: runner
+          image: "gitlab/gitlab-runner:v16.7.0"
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - /scripts/entrypoint.sh
+          env:
+            - name: GITLAB_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "assessment-platform.fullname" . }}-secrets
+                  key: GITLAB_ADMIN_TOKEN
+                  optional: false
+            - name: CI_SERVER_URL
+              value: "{{ include "assessment-platform.gitlab.internalUrl" . }}"
+          volumeMounts:
+            - name: config
+              mountPath: /home/gitlab-runner/.gitlab-runner
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            {{- toYaml .Values.gitlabRunner.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/bash
+                  - -c
+                  - gitlab-runner unregister --all-runners
+      volumes:
+        - name: config
+          emptyDir: {}
+        - name: scripts
+          configMap:
+            name: {{ include "assessment-platform.fullname" . }}-runner-config
+            defaultMode: 0755
+            items:
+              - key: entrypoint.sh
+                path: entrypoint.sh
+      terminationGracePeriodSeconds: 3600
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-runner
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-runner
+  namespace: {{ .Values.gitlabRunner.kubernetes.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec", "pods/attach", "pods/log", "secrets", "configmaps", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "patch", "update", "delete"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-runner
+  namespace: {{ .Values.gitlabRunner.kubernetes.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "assessment-platform.fullname" . }}-runner
+    namespace: {{ .Values.global.namespace }}
+roleRef:
+  kind: Role
+  name: {{ include "assessment-platform.fullname" . }}-runner
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.gitlabRunner.kubernetes.serviceAccount }}
+  namespace: {{ .Values.gitlabRunner.kubernetes.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+{{- end }}

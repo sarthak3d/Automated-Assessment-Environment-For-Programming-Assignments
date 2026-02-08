@@ -1,0 +1,31 @@
+apiVersion: v2
+name: assessment-platform
+description: Automated Assessment Environment for Programming Assignments
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+dependencies:
+  - name: postgresql
+    version: "18.3.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: redis
+    version: "25.2.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+  - name: rabbitmq
+    version: "16.0.11"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: rabbitmq.enabled
+
+keywords:
+  - assessment
+  - programming
+  - education
+  - gitlab
+  - ci-cd
+
+maintainers:
+  - name: Assessment Platform Team
+    email: admin@assessment-platform.edu

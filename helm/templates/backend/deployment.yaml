@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-backend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "assessment-platform.backend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "assessment-platform.backend.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/backend/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "assessment-platform.fullname" . }}-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.service.port }}
+              protocol: TCP
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ .Values.backend.env.SPRING_PROFILES_ACTIVE }}
+            {{- if not .Values.rabbitmq.enabled }}
+            - name: SPRING_AUTOCONFIGURE_EXCLUDE
+              value: "org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration"
+            {{- end }}
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-postgresql
+                  key: password
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-redis
+                  key: redis-password
+            {{- if .Values.rabbitmq.enabled }}
+            - name: RABBITMQ_HOST
+              value: {{ include "assessment-platform.rabbitmq.host" . | quote }}
+            - name: RABBITMQ_USERNAME
+              value: {{ .Values.rabbitmq.auth.username | quote }}
+            - name: SPRING_RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-rabbitmq
+                  key: rabbitmq-password
+            {{- end }}
+            - name: GITLAB_URL
+              value: "{{ include "assessment-platform.gitlab.internalUrl" . }}"
+            - name: GITLAB_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "assessment-platform.fullname" . }}-secrets
+                  key: GITLAB_ADMIN_TOKEN
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "assessment-platform.fullname" . }}-secrets
+                  key: JWT_SECRET
+            - name: SSO_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "assessment-platform.fullname" . }}-secrets
+                  key: SSO_CLIENT_SECRET
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "assessment-platform.fullname" . }}-backend-config
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "assessment-platform.backend.selectorLabels" . | nindent 20 }}
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-backend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}

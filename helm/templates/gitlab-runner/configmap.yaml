@@ -1,0 +1,115 @@
+{{- if and .Values.gitlab.enabled .Values.gitlabRunner.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-runner-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gitlab-runner
+data:
+  config.toml: |
+    concurrent = {{ .Values.gitlabRunner.concurrentJobs }}
+    check_interval = 3
+    shutdown_timeout = 30
+    
+    [session_server]
+      session_timeout = 1800
+    
+    [[runners]]
+      name = "assessment-platform-runner"
+      url = "{{ include "assessment-platform.gitlab.internalUrlFQDN" . }}"
+      executor = "kubernetes"
+      
+      clone_url = "{{ include "assessment-platform.gitlab.internalUrlFQDN" . }}"
+      
+      [runners.kubernetes]
+        host = ""
+        bearer_token_overwrite_allowed = false
+        image = "{{ .Values.gitlabRunner.kubernetes.image }}"
+        namespace = "{{ .Values.gitlabRunner.kubernetes.namespace }}"
+        privileged = {{ .Values.gitlabRunner.kubernetes.privileged }}
+        service_account = "{{ .Values.gitlabRunner.kubernetes.serviceAccount }}"
+        pull_policy = "{{ .Values.gitlabRunner.kubernetes.pullPolicy }}"
+        
+        cpu_limit = "{{ .Values.gitlabRunner.kubernetes.cpuLimit }}"
+        memory_limit = "{{ .Values.gitlabRunner.kubernetes.memoryLimit }}"
+        cpu_request = "{{ .Values.gitlabRunner.kubernetes.cpuRequest }}"
+        memory_request = "{{ .Values.gitlabRunner.kubernetes.memoryRequest }}"
+        
+        poll_interval = 3
+        poll_timeout = 180
+        
+        [runners.kubernetes.pod_security_context]
+          run_as_non_root = {{ .Values.gitlabRunner.kubernetes.podSecurityContext.runAsNonRoot }}
+          run_as_user = {{ .Values.gitlabRunner.kubernetes.podSecurityContext.runAsUser }}
+          fs_group = {{ .Values.gitlabRunner.kubernetes.podSecurityContext.fsGroup }}
+        
+        [runners.kubernetes.container_security_context]
+          allow_privilege_escalation = {{ .Values.gitlabRunner.kubernetes.containerSecurityContext.allowPrivilegeEscalation }}
+          read_only_root_filesystem = {{ .Values.gitlabRunner.kubernetes.containerSecurityContext.readOnlyRootFilesystem }}
+          
+        [runners.kubernetes.pod_labels]
+          "app.kubernetes.io/managed-by" = "gitlab-runner"
+          "assessment-platform.io/purpose" = "ci-job"
+        
+        [runners.kubernetes.pod_annotations]
+          "assessment-platform.io/created-by" = "assessment-runner"
+      
+      [runners.cache]
+        Type = "s3"
+        Shared = true
+  
+  entrypoint.sh: |
+    #!/bin/bash
+    set -e
+
+    GITLAB_URL="{{ include "assessment-platform.gitlab.internalUrlFQDN" . }}"
+    ADMIN_TOKEN="${GITLAB_ADMIN_TOKEN}"
+    RUNNER_NAME="assessment-runner-$(hostname)"
+
+    echo "Waiting for GitLab to be ready..."
+    until curl -s -o /dev/null -w "%{http_code}" "${GITLAB_URL}/users/sign_in" 2>/dev/null | grep -q "200"; do
+      echo "GitLab not ready yet, waiting..."
+      sleep 10
+    done
+    echo "GitLab is ready!"
+
+    if [ -z "$ADMIN_TOKEN" ]; then
+      echo "ERROR: GITLAB_ADMIN_TOKEN is not set"
+      exit 1
+    fi
+
+    echo "Creating runner via GitLab API..."
+    RUNNER_RESPONSE=$(curl -sf -X POST "${GITLAB_URL}/api/v4/user/runners" \
+      -H "PRIVATE-TOKEN: ${ADMIN_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "{\"runner_type\":\"instance_type\",\"description\":\"${RUNNER_NAME}\",\"tag_list\":\"assessment,kubernetes,{{ .Values.gitlabRunner.executor }}\",\"run_untagged\":true,\"locked\":false,\"access_level\":\"not_protected\"}" 2>&1)
+
+    RUNNER_TOKEN=$(echo "$RUNNER_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+    if [ -z "$RUNNER_TOKEN" ]; then
+      echo "ERROR: Failed to obtain runner token. API response: $RUNNER_RESPONSE"
+      exit 1
+    fi
+
+    echo "Registering runner..."
+    gitlab-runner register \
+      --non-interactive \
+      --url "${GITLAB_URL}" \
+      --token "${RUNNER_TOKEN}" \
+      --clone-url "{{ include "assessment-platform.gitlab.internalUrlFQDN" . }}" \
+      --executor "kubernetes" \
+      --kubernetes-namespace "{{ .Values.gitlabRunner.kubernetes.namespace }}" \
+      --kubernetes-image "{{ .Values.gitlabRunner.kubernetes.image }}" \
+      --kubernetes-privileged={{ .Values.gitlabRunner.kubernetes.privileged }} \
+      --kubernetes-cpu-limit="{{ .Values.gitlabRunner.kubernetes.cpuLimit }}" \
+      --kubernetes-memory-limit="{{ .Values.gitlabRunner.kubernetes.memoryLimit }}" \
+      --kubernetes-cpu-request="{{ .Values.gitlabRunner.kubernetes.cpuRequest }}" \
+      --kubernetes-memory-request="{{ .Values.gitlabRunner.kubernetes.memoryRequest }}" \
+      --kubernetes-service-account="{{ .Values.gitlabRunner.kubernetes.serviceAccount }}"
+
+    echo "Runner registered successfully!"
+    echo "Starting runner..."
+    exec gitlab-runner run --working-directory=/home/gitlab-runner
+{{- end }}

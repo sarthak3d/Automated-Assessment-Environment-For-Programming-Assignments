@@ -1,0 +1,49 @@
+{{- if and .Values.gitlab.enabled .Values.gitlab.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-gitlab-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gitlab
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.gitlab.persistence.storageClass }}
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-gitlab-logs
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gitlab
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.gitlab.persistence.storageClass }}
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-gitlab-data
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gitlab
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.gitlab.persistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.gitlab.persistence.size }}
+{{- end }}

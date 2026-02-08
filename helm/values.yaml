@@ -1,0 +1,240 @@
+global:
+  namespace: assessment-platform
+  domain: assessment.local
+  storageClass: standard
+
+backend:
+  replicaCount: 2
+  image:
+    repository: assessment-platform/backend
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+  env:
+    SPRING_PROFILES_ACTIVE: kubernetes
+    SERVER_PORT: "8080"
+  
+  sso:
+    enabled: true
+    type: oauth2
+    issuerUri: "https://sso.university.edu/realms/university"
+    clientId: "assessment-platform"
+    clientSecret: ""
+    userNameAttribute: "preferred_username"
+    rolesClaim: "roles"
+
+gitlab:
+  enabled: true
+  rootPassword: ""
+  adminToken: ""
+  image:
+    repository: gitlab/gitlab-ce
+    tag: "16.7.0-ce.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    httpPort: 80
+    sshPort: 22
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: standard
+  resources:
+    requests:
+      cpu: "2000m"
+      memory: "4Gi"
+    limits:
+      cpu: "4000m"
+      memory: "8Gi"
+  env:
+    GITLAB_OMNIBUS_CONFIG: |
+      external_url 'http://gitlab.assessment.local'
+      gitlab_rails['gitlab_shell_ssh_port'] = 22
+      gitlab_rails['initial_root_password'] = ENV['GITLAB_ROOT_PASSWORD']
+      prometheus_monitoring['enable'] = false
+      grafana['enable'] = false
+      gitlab_rails['gitlab_default_can_create_group'] = false
+      gitlab_rails['gitlab_username_changing_enabled'] = false
+
+gitlabRunner:
+  enabled: true
+  registrationToken: ""
+  replicaCount: 3
+  image:
+    repository: gitlab/gitlab-runner
+    tag: "v16.7.0"
+    pullPolicy: IfNotPresent
+  executor: kubernetes
+  concurrentJobs: 10
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  
+  kubernetes:
+    namespace: assessment-jobs
+    image: alpine:latest
+    privileged: false
+    cpuLimit: "2"
+    memoryLimit: "2Gi"
+    cpuRequest: "500m"
+    memoryRequest: "512Mi"
+    serviceAccount: gitlab-runner-jobs
+    pullPolicy: IfNotPresent
+    
+    networkPolicy:
+      enabled: true
+      allowInternet: false
+    
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      fsGroup: 1000
+    
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false
+      capabilities:
+        drop:
+          - ALL
+
+postgresql:
+  enabled: true
+  auth:
+    username: assessment
+    password: ""
+    database: assessment_db
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "2000m"
+        memory: "2Gi"
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: ""
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+rabbitmq:
+  enabled: true
+  image:
+    repository: bitnamilegacy/rabbitmq
+    tag: "4.1.2-debian-12-r1"
+  volumePermissions:
+    image:
+      repository: bitnamilegacy/os-shell
+      tag: "12-debian-12-r48"
+  auth:
+    username: assessment
+    password: ""
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+  hosts:
+    - host: api.assessment.local
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: backend
+          servicePort: 8080
+    - host: gitlab.assessment.local
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: gitlab
+          servicePort: 80
+  tls: []
+
+moduleGateway:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: nginx
+    tag: "1.25-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "64Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+  config:
+    dnsResolver: "kube-dns.kube-system.svc.cluster.local"
+    modulePort: "8080"
+    moduleNamespace: "assessment-platform"
+  ciRunnerImage: "alpine:3.19"
+
+testModules:
+  defaultTimeout: 300
+  images:
+    correctnessEvaluator:
+      repository: assessment-platform/correctness-evaluator
+      tag: "1.0.0"
+    performanceAnalyzer:
+      repository: assessment-platform/performance-analyzer
+      tag: "1.0.0"
+    codeQuality:
+      repository: assessment-platform/code-quality
+      tag: "1.0.0"
+    aiPlagiarism:
+      repository: assessment-platform/ai-plagiarism
+      tag: "1.0.0"
+    errorEvaluator:
+      repository: assessment-platform/error-evaluator
+      tag: "1.0.0"
+    genericRunner:
+      repository: assessment-platform/generic-runner
+      tag: "1.0.0"
+
+dataRetention:
+  enabled: true
+  defaultDays: 365
+  cleanupSchedule: "0 2 * * 0"

@@ -1,0 +1,49 @@
+{{- if and .Values.gitlab.enabled .Values.gitlabRunner.enabled .Values.gitlabRunner.kubernetes.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-job-isolation
+  namespace: {{ .Values.gitlabRunner.kubernetes.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      assessment-platform.io/purpose: ci-job
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: gitlab
+      ports:
+        - protocol: TCP
+          port: 80
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- if .Values.gitlabRunner.kubernetes.networkPolicy.allowInternet }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+    {{- end }}
+{{- end }}

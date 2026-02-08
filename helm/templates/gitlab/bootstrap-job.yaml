@@ -1,0 +1,153 @@
+{{- if .Values.gitlab.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-gitlab-bootstrap
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gitlab-bootstrap
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-gitlab-bootstrap
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gitlab-bootstrap
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-gitlab-bootstrap
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gitlab-bootstrap
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "assessment-platform.fullname" . }}-gitlab-bootstrap
+    namespace: {{ .Values.global.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "assessment-platform.fullname" . }}-gitlab-bootstrap
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "assessment-platform.fullname" . }}-gitlab-bootstrap
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gitlab-bootstrap
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "assessment-platform.labels" . | nindent 8 }}
+        app.kubernetes.io/component: gitlab-bootstrap
+    spec:
+      serviceAccountName: {{ include "assessment-platform.fullname" . }}-gitlab-bootstrap
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: bitnami/kubectl:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              NAMESPACE="{{ .Values.global.namespace }}"
+              SECRET_NAME="{{ include "assessment-platform.fullname" . }}-secrets"
+              BACKEND_DEPLOY="{{ include "assessment-platform.fullname" . }}-backend"
+              GITLAB_SELECTOR="app.kubernetes.io/component=gitlab,app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/name={{ include "assessment-platform.name" . }}-gitlab"
+
+              echo "Waiting for GitLab pod to become ready..."
+              for i in $(seq 1 120); do
+                GITLAB_POD="$(kubectl get pods -n "${NAMESPACE}" -l "${GITLAB_SELECTOR}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+                if [ -n "${GITLAB_POD}" ]; then
+                  READY="$(kubectl get pod "${GITLAB_POD}" -n "${NAMESPACE}" -o jsonpath='{.status.containerStatuses[0].ready}' 2>/dev/null || true)"
+                  if [ "${READY}" = "true" ]; then
+                    break
+                  fi
+                fi
+                sleep 10
+              done
+
+              if [ -z "${GITLAB_POD:-}" ]; then
+                echo "ERROR: GitLab pod not found"
+                exit 1
+              fi
+
+              READY="$(kubectl get pod "${GITLAB_POD}" -n "${NAMESPACE}" -o jsonpath='{.status.containerStatuses[0].ready}' 2>/dev/null || true)"
+              if [ "${READY}" != "true" ]; then
+                echo "ERROR: GitLab pod was found but is not ready"
+                exit 1
+              fi
+
+              ROOT_PASSWORD="$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath='{.data.GITLAB_ROOT_PASSWORD}' | base64 -d)"
+              if [ -z "${ROOT_PASSWORD}" ]; then
+                echo "ERROR: Root password is empty"
+                exit 1
+              fi
+
+              echo "Creating GitLab admin token for backend integration..."
+              ADMIN_TOKEN="$(
+                kubectl exec -n "${NAMESPACE}" "${GITLAB_POD}" -- env GITLAB_ROOT_PASSWORD="${ROOT_PASSWORD}" bash -lc '
+                  gitlab-rails runner "
+                    user = User.find_by_username(\"root\")
+                    raise \"root user not found\" unless user
+                    name = \"assessment-platform-backend-token\"
+                    user.personal_access_tokens.where(name: name).each(&:revoke!)
+                    token = user.personal_access_tokens.build(name: name, scopes: [:api], expires_at: 1.year.from_now)
+                    token.save!
+                    puts token.token
+                  "
+                ' | tail -n1 | tr -d "\r\n"
+              )"
+
+              if [ -z "${ADMIN_TOKEN}" ]; then
+                echo "ERROR: Failed to generate GitLab admin token"
+                exit 1
+              fi
+
+              kubectl patch secret "${SECRET_NAME}" -n "${NAMESPACE}" --type merge -p "{\"stringData\":{\"GITLAB_ADMIN_TOKEN\":\"${ADMIN_TOKEN}\"}}"
+
+              NOW="$(date +%s)"
+              kubectl patch deployment "${BACKEND_DEPLOY}" -n "${NAMESPACE}" --type merge -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"assessment-platform.io/gitlab-token-reloaded\":\"${NOW}\"}}}}}"
+{{- if .Values.gitlabRunner.enabled }}
+              RUNNER_DEPLOY="{{ include "assessment-platform.fullname" . }}-runner"
+              kubectl patch deployment "${RUNNER_DEPLOY}" -n "${NAMESPACE}" --type merge -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"assessment-platform.io/gitlab-token-reloaded\":\"${NOW}\"}}}}}"
+{{- end }}
+
+              echo "GitLab bootstrap completed successfully."
+{{- end }}

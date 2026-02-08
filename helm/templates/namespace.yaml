@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.global.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.gitlabRunner.kubernetes.namespace }}
+  labels:
+    {{- include "assessment-platform.labels" . | nindent 4 }}
+    purpose: ci-jobs
