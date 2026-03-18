@@ -24,7 +24,7 @@ This platform grades programming assignments automatically. It spins up GitLab i
 
 The platform calls three microservices during the pipeline run to grade student submissions:
 
-- [**LLM Code Service**](https://github.com/sarthak3d/LLM-code-Service)
+- [**Error Evaluator and Best Practices Reviewer**](https://github.com/sarthak3d/LLM-code-Service)
   Runs automated code reviews using language models. It reads the code and leaves notes on readability and structure, similar to a code review from a peer.
 - [**Performance Analyzer**](https://github.com/sarthak3d/Performance-analyzer)
   Profiles execution time and memory usage so instructors can enforce specific Big-O complexity requirements.
@@ -49,7 +49,7 @@ We've split the deployment and startup configurations into dedicated guides:
 
 - [**Fresh Installation Guide**](assets/doc/INSTALLATION.md)  
   A comprehensive guide to setting up the platform locally using Docker, Minikube, Helm, and our automated Bash wrapper. Use this if you are a new developer or setting up from scratch.
-- [**Deployment Steps & E2E Tests**](assets/doc/DEPLOYMENT-STEPS.md)  
+- [**Deployment Steps**](assets/doc/DEPLOYMENT-STEPS.md)  
   Direct Helm installation commands, runner verification checks, and instructions for running the automated End-to-End testing suite.
 
 > [!IMPORTANT]
