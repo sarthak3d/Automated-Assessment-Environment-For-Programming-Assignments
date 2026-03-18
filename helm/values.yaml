@@ -112,11 +112,15 @@ gitlabRunner:
 
 postgresql:
   enabled: true
+  image:
+    tag: "18"
   auth:
     username: assessment
     password: ""
     database: assessment_db
   primary:
+    extendedConfiguration: |-
+      io_method = io_uring
     persistence:
       enabled: true
       size: 20Gi
