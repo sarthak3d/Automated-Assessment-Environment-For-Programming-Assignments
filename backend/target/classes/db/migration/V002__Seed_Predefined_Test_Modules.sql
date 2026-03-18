@@ -2,27 +2,27 @@
 
 INSERT INTO test_modules (id, name, display_name, description, docker_image, docker_tag, output_type, use_for_grading, predefined, default_timeout_seconds, default_memory_limit_mb, created_at, updated_at)
 VALUES
-    (gen_random_uuid(), 'correctness_evaluator', 'Correctness Evaluator', 
+    ('00000000-0000-0000-0000-000000000001', 'correctness_evaluator', 'Correctness Evaluator', 
      'Validates code output against expected test cases', 
      'assessment-platform/correctness-evaluator', 'latest', 'PASS_FAIL', 
      true, true, 300, 512, NOW(), NOW()),
     
-    (gen_random_uuid(), 'performance_analyzer', 'Performance Analyzer', 
+    ('00000000-0000-0000-0000-000000000002', 'performance_analyzer', 'Performance Analyzer', 
      'Analyzes time and space complexity using bigO-analyzer', 
      'assessment-platform/performance-analyzer', 'latest', 'TEXT_MATCH', 
      true, true, 600, 2048, NOW(), NOW()),
     
-    (gen_random_uuid(), 'code_quality', 'Code Quality Evaluator', 
+    ('00000000-0000-0000-0000-000000000003', 'code_quality', 'Code Quality Evaluator', 
      'Checks code for best practices and coding standards', 
      'assessment-platform/code-quality', 'latest', 'PERCENTAGE', 
      true, true, 300, 1024, NOW(), NOW()),
     
-    (gen_random_uuid(), 'ai_plagiarism', 'AI Plagiarism Checker', 
+    ('00000000-0000-0000-0000-000000000004', 'ai_plagiarism', 'AI Plagiarism Checker', 
      'Detects AI-generated code using machine learning classification', 
      'assessment-platform/ai-plagiarism', 'latest', 'PERCENTAGE', 
      true, true, 120, 4096, NOW(), NOW()),
     
-    (gen_random_uuid(), 'error_evaluator', 'Error Evaluator', 
+    ('00000000-0000-0000-0000-000000000005', 'error_evaluator', 'Error Evaluator', 
      'Uses LLM and compiler to provide detailed error analysis and suggestions', 
      'assessment-platform/error-evaluator', 'latest', 'SUGGESTION_ONLY', 
      false, true, 600, 2048, NOW(), NOW());

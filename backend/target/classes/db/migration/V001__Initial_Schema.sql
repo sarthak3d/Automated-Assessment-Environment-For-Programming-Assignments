@@ -73,7 +73,7 @@ CREATE INDEX idx_test_modules_name ON test_modules(name);
 CREATE INDEX idx_test_modules_output_type ON test_modules(output_type);
 
 CREATE TABLE test_module_valid_texts (
-    test_module_id UUID NOT NULL REFERENCES test_modules(id) ON DELETE CASCADE,
+    test_module_id UUID NOT NULL REFERENCES test_modules(id) ON DELETE CASCADE ON UPDATE CASCADE,
     valid_text VARCHAR(255) NOT NULL
 );
 
@@ -100,14 +100,14 @@ CREATE INDEX idx_assignments_status ON assignments(status);
 
 CREATE TABLE assignment_test_modules (
     assignment_id UUID NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
-    test_module_id UUID NOT NULL REFERENCES test_modules(id),
+    test_module_id UUID NOT NULL REFERENCES test_modules(id) ON DELETE CASCADE ON UPDATE CASCADE,
     PRIMARY KEY (assignment_id, test_module_id)
 );
 
 CREATE TABLE test_module_weights (
     id UUID PRIMARY KEY,
     assignment_id UUID NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
-    test_module_id UUID NOT NULL REFERENCES test_modules(id),
+    test_module_id UUID NOT NULL REFERENCES test_modules(id) ON DELETE CASCADE ON UPDATE CASCADE,
     weight DOUBLE PRECISION NOT NULL,
     order_index INTEGER NOT NULL DEFAULT 0,
     enabled BOOLEAN NOT NULL DEFAULT true,
@@ -174,7 +174,7 @@ CREATE INDEX idx_submissions_status ON submissions(status);
 CREATE TABLE test_results (
     id UUID PRIMARY KEY,
     submission_id UUID NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
-    test_module_id UUID NOT NULL REFERENCES test_modules(id),
+    test_module_id UUID NOT NULL REFERENCES test_modules(id) ON DELETE CASCADE ON UPDATE CASCADE,
     job_id BIGINT,
     job_name VARCHAR(100),
     status VARCHAR(30) NOT NULL DEFAULT 'PENDING',

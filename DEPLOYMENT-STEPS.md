@@ -1,4 +1,4 @@
-# Deployment Steps (Kubernetes + Helm)
+# Deployment Steps
 
 ## 1) Prerequisites
 
