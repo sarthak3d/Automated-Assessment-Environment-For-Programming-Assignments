@@ -150,7 +150,7 @@ All paths use the prefix `/courses/{courseId}/assignments`.
     "testModuleIds": ["uuid-1", "uuid-2"]
   }
   ```
-- **Description**: Creates a new assignment in `DRAFT` status and creates a GitLab repository project for it. optionally configures default test modules.
+- **Description**: Creates a new assignment in `DRAFT` status, creates a GitLab repository project for it, and optionally configures default test modules.
 - **Responses**:
   - `201 Created`: Returns the created `Assignment`.
   - `404 Not Found`: If the course does not exist.
@@ -167,7 +167,7 @@ All paths use the prefix `/courses/{courseId}/assignments`.
 ### Publish Assignment (Admin or Teacher Role)
 - **URL**: `/{id}/publish`
 - **Method**: `POST`
-- **Description**: Changes the assignment status to `PUBLISHED`, generates CI configuration YAML based on test module weights, and commits it to the GitLab repository.
+- **Description**: Changes the assignment status to `PUBLISHED`. It also generates the CI configuration YAML based on test module weights and commits it to the GitLab repository.
 - **Responses**:
   - `200 OK`: Returns the updated `Assignment`.
   - `400 Bad Request`: If the assignment is not in `DRAFT` status.
@@ -189,7 +189,7 @@ All paths use the prefix `/courses/{courseId}/assignments`.
     }
   ]
   ```
-- **Description**: Overwrites configuring test modules and assigning corresponding weights for an assignment.
+- **Description**: Submits the test module configuration and corresponding weights for an assignment.
 - **Responses**:
   - `200 OK`: Reconfigured successfully.
 
@@ -227,7 +227,7 @@ All paths use the prefix `/courses/{courseId}/assignments/{assignmentId}/submiss
     }
   }
   ```
-- **Description**: Submits code for an assignment. Checks deadlines, max attempt count, ensures the assignment is published, commits files to GitLab, and triggers the CI pipeline.
+- **Description**: Submits code for an assignment. It checks deadlines and max attempt limits, makes sure the assignment is published, commits the files to GitLab, and triggers the CI pipeline.
 - **Responses**:
   - `201 Created`: Returns the created `Submission` object (status `QUEUED` or `ERROR`).
   - `400 Bad Request`: If max submissions exceeded, deadline passed, or assignment not open.
@@ -261,7 +261,7 @@ All paths use the prefix `/courses/{courseId}/assignments/{assignmentId}/submiss
 
 ## 5. Webhooks (`/webhooks`)
 
-GitLab system webhook callbacks used mostly by the CI/CD integration. No manual calls intended.
+GitLab system webhook callbacks used by the CI/CD integration. These shouldn't be called manually.
 
 ### Handle Pipeline Webhook
 - **URL**: `/webhooks/pipeline`

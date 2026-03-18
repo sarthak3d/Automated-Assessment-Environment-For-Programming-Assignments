@@ -37,8 +37,8 @@ public class SubmissionController {
     private final GradingService gradingService;
 
     public SubmissionController(SubmissionRepository submissionRepository, AssignmentRepository assignmentRepository,
-                                CourseRepository courseRepository, GitLabService gitLabService,
-                                GradingService gradingService) {
+            CourseRepository courseRepository, GitLabService gitLabService,
+            GradingService gradingService) {
         this.submissionRepository = submissionRepository;
         this.assignmentRepository = assignmentRepository;
         this.courseRepository = courseRepository;
@@ -56,7 +56,7 @@ public class SubmissionController {
         Page<Submission> submissions;
         if (currentUser.getRole() == User.Role.STUDENT) {
             submissions = submissionRepository.findByStudentIdAndAssignmentId(
-                currentUser.getId(), assignmentId, pageable);
+                    currentUser.getId(), assignmentId, pageable);
         } else {
             submissions = submissionRepository.findByAssignmentId(assignmentId, pageable);
         }
@@ -72,11 +72,11 @@ public class SubmissionController {
             @AuthenticationPrincipal User currentUser) {
 
         return submissionRepository.findById(id)
-            .filter(s -> s.getAssignment().getId().equals(assignmentId))
-            .filter(s -> canAccessSubmission(s, currentUser))
-            .map(SubmissionDto::fromEntity)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+                .filter(s -> s.getAssignment().getId().equals(assignmentId))
+                .filter(s -> canAccessSubmission(s, currentUser))
+                .map(SubmissionDto::fromEntity)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
@@ -88,65 +88,63 @@ public class SubmissionController {
             @AuthenticationPrincipal User currentUser) {
 
         Assignment assignment = assignmentRepository.findById(assignmentId)
-            .filter(a -> a.getCourse().getId().equals(courseId))
-            .orElseThrow(() -> new IllegalArgumentException("Assignment not found"));
+                .filter(a -> a.getCourse().getId().equals(courseId))
+                .orElseThrow(() -> new IllegalArgumentException("Assignment not found"));
 
         if (assignment.getStatus() != Assignment.Status.PUBLISHED) {
             return ResponseEntity.badRequest()
-                .body(Map.of("error", "Assignment is not open for submissions"));
+                    .body(Map.of("error", "Assignment is not open for submissions"));
         }
 
         Instant now = Instant.now();
         if (!assignment.isAllowLateSubmissions() && now.isAfter(assignment.getDueDate())) {
             return ResponseEntity.badRequest()
-                .body(Map.of("error", "Assignment deadline has passed"));
+                    .body(Map.of("error", "Assignment deadline has passed"));
         }
 
         int submissionCount = submissionRepository.countSubmissionsByStudentAndAssignment(
-            currentUser.getId(), assignmentId);
+                currentUser.getId(), assignmentId);
         if (submissionCount >= assignment.getMaxSubmissions()) {
             return ResponseEntity.badRequest()
-                .body(Map.of("error", "Maximum number of submissions reached"));
+                    .body(Map.of("error", "Maximum number of submissions reached"));
         }
 
         int attemptNumber = submissionRepository.findMaxAttemptNumber(currentUser.getId(), assignmentId)
-            .orElse(0) + 1;
+                .orElse(0) + 1;
 
         Submission submission = Submission.builder()
-            .student(currentUser)
-            .assignment(assignment)
-            .attemptNumber(attemptNumber)
-            .status(Submission.Status.PENDING)
-            .build();
+                .student(currentUser)
+                .assignment(assignment)
+                .attemptNumber(attemptNumber)
+                .status(Submission.Status.PENDING)
+                .build();
 
         submission = submissionRepository.save(submission);
 
         if (assignment.getGitlabProjectId() != null) {
             try {
                 String studentFolder = "students/" + currentUser.getId();
-                
+
                 if (currentUser.getGitlabUserId() != null) {
                     gitLabService.addUserToProject(
-                        assignment.getGitlabProjectId(),
-                        currentUser.getGitlabUserId(),
-                        AccessLevel.DEVELOPER
-                    );
+                            assignment.getGitlabProjectId(),
+                            currentUser.getGitlabUserId(),
+                            AccessLevel.DEVELOPER);
                 }
 
                 for (Map.Entry<String, String> file : request.files().entrySet()) {
                     String filePath = studentFolder + "/" + file.getKey();
                     gitLabService.commitFile(
-                        assignment.getGitlabProjectId(),
-                        filePath,
-                        file.getValue(),
-                        "Submission attempt " + attemptNumber + " by " + currentUser.getUsername(),
-                        "main"
-                    );
+                            assignment.getGitlabProjectId(),
+                            filePath,
+                            file.getValue(),
+                            "Submission attempt " + attemptNumber + " by " + currentUser.getUsername(),
+                            "main");
                 }
 
                 Long pipelineId = gitLabService.triggerPipeline(
-                    assignment.getGitlabProjectId(), "main",
-                    Map.of("STUDENT_ID", currentUser.getId().toString()));
+                        assignment.getGitlabProjectId(), "main",
+                        Map.of("STUDENT_ID", currentUser.getId().toString()));
                 submission.setPipelineId(pipelineId);
                 submission.setStatus(Submission.Status.QUEUED);
 
@@ -160,9 +158,9 @@ public class SubmissionController {
         }
 
         return ResponseEntity.created(
-            URI.create("/api/v1/courses/" + courseId + "/assignments/" + assignmentId + 
-                       "/submissions/" + submission.getId())
-        ).body(SubmissionDto.fromEntity(submission));
+                URI.create("/api/v1/courses/" + courseId + "/assignments/" + assignmentId +
+                        "/submissions/" + submission.getId()))
+                .body(SubmissionDto.fromEntity(submission));
     }
 
     @GetMapping("/{id}/grade")
@@ -173,9 +171,9 @@ public class SubmissionController {
             @AuthenticationPrincipal User currentUser) {
 
         Submission submission = submissionRepository.findById(id)
-            .filter(s -> s.getAssignment().getId().equals(assignmentId))
-            .filter(s -> canAccessSubmission(s, currentUser))
-            .orElse(null);
+                .filter(s -> s.getAssignment().getId().equals(assignmentId))
+                .filter(s -> canAccessSubmission(s, currentUser))
+                .orElse(null);
 
         if (submission == null) {
             return ResponseEntity.notFound().build();
@@ -183,9 +181,8 @@ public class SubmissionController {
 
         if (submission.getGrade() == null) {
             return ResponseEntity.ok(Map.of(
-                "status", "pending",
-                "message", "Grade not yet calculated"
-            ));
+                    "status", "pending",
+                    "message", "Grade not yet calculated"));
         }
 
         return ResponseEntity.ok(GradeDto.fromEntity(submission.getGrade()));
@@ -199,8 +196,8 @@ public class SubmissionController {
             @PathVariable UUID id) {
 
         Submission submission = submissionRepository.findById(id)
-            .filter(s -> s.getAssignment().getId().equals(assignmentId))
-            .orElseThrow(() -> new IllegalArgumentException("Submission not found"));
+                .filter(s -> s.getAssignment().getId().equals(assignmentId))
+                .orElseThrow(() -> new IllegalArgumentException("Submission not found"));
 
         gradingService.triggerGrading(submission.getId());
         return ResponseEntity.accepted().build();
@@ -213,9 +210,9 @@ public class SubmissionController {
             @AuthenticationPrincipal User currentUser) {
 
         return submissionRepository.findLatestSubmission(currentUser.getId(), assignmentId)
-            .map(SubmissionDto::fromEntity)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.noContent().build());
+                .map(SubmissionDto::fromEntity)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
     }
 
     private boolean canAccessSubmission(Submission submission, User user) {
@@ -224,10 +221,11 @@ public class SubmissionController {
         }
         if (user.getRole() == User.Role.TEACHER) {
             return assignmentRepository.existsByIdAndCourseInstructorId(
-                submission.getAssignment().getId(), user.getId());
+                    submission.getAssignment().getId(), user.getId());
         }
         return submission.getStudent().getId().equals(user.getId());
     }
 
-    public record CreateSubmissionRequest(Map<String, String> files) {}
+    public record CreateSubmissionRequest(Map<String, String> files) {
+    }
 }

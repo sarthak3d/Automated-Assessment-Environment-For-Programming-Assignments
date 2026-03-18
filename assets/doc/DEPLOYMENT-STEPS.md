@@ -54,33 +54,8 @@ kubectl logs -n assessment-platform deploy/assessment-assessment-platform-runner
 
 The logs should include `Runner registered successfully!`.
 
-Optional API check:
+Once the platform deploys successfully, you can port-forward the services to expose them to your local `localhost` network:
 
-```powershell
-$pf = Start-Process -FilePath kubectl -ArgumentList "port-forward svc/assessment-assessment-platform-gitlab 8929:80 -n assessment-platform" -WindowStyle Hidden -PassThru
-Start-Sleep -Seconds 5
-$tokenB64 = kubectl get secret assessment-assessment-platform-secrets -n assessment-platform -o jsonpath='{.data.GITLAB_ADMIN_TOKEN}'
-$token = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($tokenB64))
-Invoke-RestMethod -Uri "http://127.0.0.1:8929/api/v4/runners?per_page=50" -Headers @{ "PRIVATE-TOKEN" = $token }
-Stop-Process -Id $pf.Id -Force
-```
-
-## 6) Run end-to-end functionality tests
-
-```powershell
-$pf1 = Start-Process -FilePath kubectl -ArgumentList "port-forward svc/assessment-assessment-platform-backend 8081:8080 -n assessment-platform" -WindowStyle Hidden -PassThru
-$pf2 = Start-Process -FilePath kubectl -ArgumentList "port-forward svc/assessment-assessment-platform-gitlab 8929:80 -n assessment-platform" -WindowStyle Hidden -PassThru
-Start-Sleep -Seconds 8
-powershell -ExecutionPolicy Bypass -File .\test-e2e-k8s-gitlab.ps1
-Stop-Process -Id $pf1.Id -Force
-Stop-Process -Id $pf2.Id -Force
-```
-
-The E2E script validates:
-- login
-- logout
-- course creation
-- assignment creation
-- file upload/commit to GitLab
-- `.gitlab-ci.yml` creation
-- pipeline trigger and progression beyond pending states
+```bash
+# Forward Backend API
+kubectl port-forward svc/assessment-assessment-platform-backend 8080:8080 -n assessment-platform

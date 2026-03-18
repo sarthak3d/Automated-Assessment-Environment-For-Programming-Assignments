@@ -3,20 +3,14 @@ package com.assessment.controller;
 import com.assessment.dto.AuthResponse;
 import com.assessment.dto.UserDto;
 import com.assessment.service.AuthService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
-
-    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     private final AuthService authService;
 
@@ -46,9 +40,7 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@RequestHeader("Authorization") String authHeader) {
         String token = extractToken(authHeader);
-        authService.getCurrentUser(token).ifPresent(user ->
-            authService.logout(user.getId())
-        );
+        authService.getCurrentUser(token).ifPresent(user -> authService.logout(user.getId()));
         return ResponseEntity.noContent().build();
     }
 
@@ -56,8 +48,8 @@ public class AuthController {
     public ResponseEntity<?> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
         String token = extractToken(authHeader);
         return authService.getCurrentUser(token)
-            .map(user -> ResponseEntity.ok(UserDto.fromEntity(user)))
-            .orElse(ResponseEntity.notFound().build());
+                .map(user -> ResponseEntity.ok(UserDto.fromEntity(user)))
+                .orElse(ResponseEntity.notFound().build());
     }
 
     private String extractToken(String authHeader) {
@@ -67,5 +59,6 @@ public class AuthController {
         throw new IllegalArgumentException("Invalid Authorization header");
     }
 
-    public record LoginRequest(String username, String password) {}
+    public record LoginRequest(String username, String password) {
+    }
 }

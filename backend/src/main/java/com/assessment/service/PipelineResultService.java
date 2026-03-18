@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 public class PipelineResultService {
@@ -38,9 +37,9 @@ public class PipelineResultService {
     private final ObjectMapper objectMapper;
 
     public PipelineResultService(SubmissionRepository submissionRepository, TestResultRepository testResultRepository,
-                                 TestModuleRepository testModuleRepository, GitLabService gitLabService,
-                                 GradingService gradingService, RabbitTemplate rabbitTemplate,
-                                 ObjectMapper objectMapper) {
+            TestModuleRepository testModuleRepository, GitLabService gitLabService,
+            GradingService gradingService, RabbitTemplate rabbitTemplate,
+            ObjectMapper objectMapper) {
         this.submissionRepository = submissionRepository;
         this.testResultRepository = testResultRepository;
         this.testModuleRepository = testModuleRepository;
@@ -52,35 +51,33 @@ public class PipelineResultService {
 
     @Transactional
     public void processPipelineWebhook(Long projectId, Long pipelineId, String status) {
-        log.info("Received pipeline webhook: project={}, pipeline={}, status={}", 
-            projectId, pipelineId, status);
+        log.info("Received pipeline webhook: project={}, pipeline={}, status={}",
+                projectId, pipelineId, status);
 
         submissionRepository.findByPipelineId(pipelineId).ifPresent(submission -> {
             PipelineResultMessage message = new PipelineResultMessage(
-                submission.getId(),
-                projectId,
-                pipelineId,
-                status,
-                Instant.now()
-            );
+                    submission.getId(),
+                    projectId,
+                    pipelineId,
+                    status,
+                    Instant.now());
 
             rabbitTemplate.convertAndSend(
-                RabbitMQConfig.PIPELINE_RESULTS_EXCHANGE,
-                RabbitMQConfig.PIPELINE_RESULTS_ROUTING_KEY,
-                message
-            );
+                    RabbitMQConfig.PIPELINE_RESULTS_EXCHANGE,
+                    RabbitMQConfig.PIPELINE_RESULTS_ROUTING_KEY,
+                    message);
         });
     }
 
     @RabbitListener(queues = RabbitMQConfig.PIPELINE_RESULTS_QUEUE)
     @Transactional
     public void handlePipelineResult(PipelineResultMessage message) {
-        log.info("Processing pipeline result: submission={}, status={}", 
-            message.submissionId(), message.status());
+        log.info("Processing pipeline result: submission={}, status={}",
+                message.submissionId(), message.status());
 
         try {
             Submission submission = submissionRepository.findById(message.submissionId())
-                .orElseThrow(() -> new IllegalArgumentException("Submission not found"));
+                    .orElseThrow(() -> new IllegalArgumentException("Submission not found"));
 
             updateSubmissionStatus(submission, message.status());
 
@@ -88,14 +85,14 @@ public class PipelineResultService {
                 fetchAndProcessJobResults(submission, message.projectId(), message.pipelineId());
 
                 if (submission.getStatus() == Submission.Status.PASSED ||
-                    submission.getStatus() == Submission.Status.FAILED) {
+                        submission.getStatus() == Submission.Status.FAILED) {
                     gradingService.triggerGrading(submission.getId());
                 }
             }
 
         } catch (Exception e) {
             log.error("Failed to process pipeline result for submission {}: {}",
-                message.submissionId(), e.getMessage(), e);
+                    message.submissionId(), e.getMessage(), e);
         }
     }
 
@@ -139,13 +136,13 @@ public class PipelineResultService {
 
         TestModule module = moduleOpt.get();
         TestResult result = testResultRepository
-            .findBySubmissionIdAndTestModuleId(submission.getId(), module.getId())
-            .orElseGet(() -> {
-                TestResult newResult = new TestResult();
-                newResult.setSubmission(submission);
-                newResult.setTestModule(module);
-                return newResult;
-            });
+                .findBySubmissionIdAndTestModuleId(submission.getId(), module.getId())
+                .orElseGet(() -> {
+                    TestResult newResult = new TestResult();
+                    newResult.setSubmission(submission);
+                    newResult.setTestModule(module);
+                    return newResult;
+                });
 
         result.setJobId(job.getId());
         result.setJobName(jobName);
@@ -159,15 +156,13 @@ public class PipelineResultService {
         }
         if (result.getStartedAt() != null && result.getFinishedAt() != null) {
             result.setExecutionTimeMs(
-                result.getFinishedAt().toEpochMilli() - result.getStartedAt().toEpochMilli()
-            );
+                    result.getFinishedAt().toEpochMilli() - result.getStartedAt().toEpochMilli());
         }
 
         try {
             String artifactPath = jobName + "_result.json";
             Optional<String> artifactContent = gitLabService.getFileContent(
-                projectId, artifactPath, "main"
-            );
+                    projectId, artifactPath, "main");
 
             if (artifactContent.isPresent()) {
                 parseAndApplyResult(result, module, artifactContent.get());
@@ -245,9 +240,9 @@ public class PipelineResultService {
 
     private boolean isPipelineComplete(String status) {
         String lower = status.toLowerCase();
-        return lower.equals("success") || lower.equals("failed") || 
-               lower.equals("canceled") || lower.equals("cancelled") ||
-               lower.equals("skipped");
+        return lower.equals("success") || lower.equals("failed") ||
+                lower.equals("canceled") || lower.equals("cancelled") ||
+                lower.equals("skipped");
     }
 
     private TestResult.Status mapJobStatus(String status) {
