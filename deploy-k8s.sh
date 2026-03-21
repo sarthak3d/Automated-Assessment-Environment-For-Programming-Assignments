@@ -283,21 +283,9 @@ print_access_info() {
     fi
 
     echo "  Backend API         : ${backend_url}"
-    echo "  Swagger UI          : ${backend_url}/swagger-ui.html"
-    echo "  Actuator Health     : ${backend_url}/actuator/health"
-    echo ""
     echo "  Minikube Dashboard  : minikube dashboard"
     echo "  Port-Forward Backend: kubectl port-forward svc/${RELEASE_NAME}-${PROJECT_NAME}-backend 8080:8080 -n ${NAMESPACE}"
-    echo "  Port-Forward GitLab : kubectl port-forward svc/${RELEASE_NAME}-${PROJECT_NAME}-gitlab 8929:80 -n ${NAMESPACE}"
-    echo ""
-    echo "  GitLab root password: ${GITLAB_ROOT_PASSWORD}"
-    echo ""
-    echo "  Test Accounts (POST /api/v1/auth/login):"
-    echo "    admin   / admin123   (ADMIN)"
-    echo "    teacher / teacher123 (TEACHER)"
-    echo "    student / student123 (STUDENT)"
-    echo "============================================================"
-    echo ""
+
 }
 
 show_status() {
@@ -365,21 +353,12 @@ teardown() {
 port_forward() {
     log_info "Starting port-forwarding for local access..."
     log_info "  Backend  -> localhost:8080"
-    log_info "  GitLab   -> localhost:8929"
-    log_info "  RabbitMQ -> localhost:15672"
-    echo ""
     log_info "Press Ctrl+C to stop all port-forwards."
 
     kubectl port-forward "svc/${RELEASE_NAME}-${PROJECT_NAME}-backend" 8080:8080 -n "${NAMESPACE}" &
     local pf_backend=$!
 
-    kubectl port-forward "svc/${RELEASE_NAME}-${PROJECT_NAME}-gitlab" 8929:80 -n "${NAMESPACE}" &
-    local pf_gitlab=$!
-
-    kubectl port-forward "svc/${RELEASE_NAME}-rabbitmq" 15672:15672 -n "${NAMESPACE}" 2>/dev/null &
-    local pf_rabbitmq=$!
-
-    trap "kill ${pf_backend} ${pf_gitlab} ${pf_rabbitmq} 2>/dev/null; exit 0" INT TERM
+    trap "kill ${pf_backend} 2>/dev/null; exit 0" INT TERM
     wait
 }
 
